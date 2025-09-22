@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "noEmit": false,
+    "target": "es2019"
+  },
+  "include": [
+    "src/lib/server.ts",
+    "src/lib/websocket-server.ts",
+    "src/lib/database.ts",
+    "src/lib/auth.ts",
+    "src/types/**/*.ts"
+  ],
+  "exclude": [
+    "src/app/**/*",
+    "src/components/**/*"
+  ]
+}
