@@ -9,6 +9,7 @@ interface MessageListProps {
   messages: Message[];
   currentUserId?: string;
   onlineUsers?: User[];
+  typingUsers?: string[];
 }
 
 interface MessageItemProps {
@@ -78,7 +79,37 @@ function MessageItem({ message, isOwnMessage, onlineUsers, currentUserId }: Mess
   );
 }
 
-export function MessageList({ messages, currentUserId, onlineUsers = [] }: MessageListProps) {
+// タイピングインジケーターコンポーネント
+function TypingIndicator({ typingUsers = [], onlineUsers = [] }: { typingUsers?: string[], onlineUsers?: User[] }) {
+  if (typingUsers.length === 0) return null;
+
+  const typingUserNames = typingUsers
+    .map(userId => onlineUsers.find(user => user.id === userId)?.displayName || 'Someone')
+    .filter(Boolean);
+
+  if (typingUserNames.length === 0) return null;
+
+  const typingText = typingUserNames.length === 1
+    ? `${typingUserNames[0]} is typing...`
+    : typingUserNames.length === 2
+    ? `${typingUserNames[0]} and ${typingUserNames[1]} are typing...`
+    : `${typingUserNames.length} people are typing...`;
+
+  return (
+    <div className="px-2 sm:px-0 mb-4">
+      <div className="flex items-center space-x-2 text-slate-500 dark:text-slate-400 text-sm">
+        <div className="flex space-x-1">
+          <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+          <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+          <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+        </div>
+        <span>{typingText}</span>
+      </div>
+    </div>
+  );
+}
+
+export function MessageList({ messages, currentUserId, onlineUsers = [], typingUsers = [] }: MessageListProps) {
   return (
     <div
       className="flex-1 overflow-y-auto scrollbar-thin bg-white dark:bg-slate-900 px-2 sm:px-4 py-4"
@@ -103,6 +134,7 @@ export function MessageList({ messages, currentUserId, onlineUsers = [] }: Messa
               currentUserId={currentUserId}
             />
           ))}
+          <TypingIndicator typingUsers={typingUsers} onlineUsers={onlineUsers} />
         </div>
       )}
     </div>

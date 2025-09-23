@@ -21,6 +21,16 @@ describe('WebSocket Message Contract Tests', () => {
     displayName: z.string().min(1).max(50)
   });
 
+  const TypingStartSchema = z.object({
+    type: z.literal('typing_start'),
+    roomId: z.string()
+  });
+
+  const TypingStopSchema = z.object({
+    type: z.literal('typing_stop'),
+    roomId: z.string()
+  });
+
   // Server to Client Event Schemas
   const HelloSchema = z.object({
     type: z.literal('hello'),
@@ -64,6 +74,19 @@ describe('WebSocket Message Contract Tests', () => {
     type: z.literal('error'),
     code: z.enum(['UNAUTH', 'RATE_LIMIT', 'BAD_REQUEST', 'SERVER_ERROR']),
     msg: z.string()
+  });
+
+  const UserTypingSchema = z.object({
+    type: z.literal('user_typing'),
+    roomId: z.string(),
+    userId: z.string(),
+    displayName: z.string()
+  });
+
+  const UserTypingStopSchema = z.object({
+    type: z.literal('user_typing_stop'),
+    roomId: z.string(),
+    userId: z.string()
   });
 
   describe('Client to Server Events', () => {
@@ -163,6 +186,46 @@ describe('WebSocket Message Contract Tests', () => {
         };
 
         expect(() => SetNameSchema.parse(longName)).toThrow();
+      });
+    });
+
+    describe('typing events', () => {
+      describe('typing_start event', () => {
+        it('should accept valid typing_start message', () => {
+          const validTypingStart = {
+            type: 'typing_start' as const,
+            roomId: 'default'
+          };
+
+          expect(() => TypingStartSchema.parse(validTypingStart)).not.toThrow();
+        });
+
+        it('should reject typing_start without roomId', () => {
+          const invalidTypingStart = {
+            type: 'typing_start' as const
+          };
+
+          expect(() => TypingStartSchema.parse(invalidTypingStart)).toThrow();
+        });
+      });
+
+      describe('typing_stop event', () => {
+        it('should accept valid typing_stop message', () => {
+          const validTypingStop = {
+            type: 'typing_stop' as const,
+            roomId: 'default'
+          };
+
+          expect(() => TypingStopSchema.parse(validTypingStop)).not.toThrow();
+        });
+
+        it('should reject typing_stop without roomId', () => {
+          const invalidTypingStop = {
+            type: 'typing_stop' as const
+          };
+
+          expect(() => TypingStopSchema.parse(invalidTypingStop)).toThrow();
+        });
       });
     });
   });
@@ -310,6 +373,71 @@ describe('WebSocket Message Contract Tests', () => {
         };
 
         expect(() => HistorySchema.parse(historyNoCursor)).not.toThrow();
+      });
+    });
+
+    describe('typing events', () => {
+      describe('user_typing event', () => {
+        it('should accept valid user_typing message', () => {
+          const validUserTyping = {
+            type: 'user_typing' as const,
+            roomId: 'default',
+            userId: 'user_123',
+            displayName: 'Alice'
+          };
+
+          expect(() => UserTypingSchema.parse(validUserTyping)).not.toThrow();
+        });
+
+        it('should reject user_typing without userId', () => {
+          const invalidUserTyping = {
+            type: 'user_typing' as const,
+            roomId: 'default',
+            displayName: 'Alice'
+          };
+
+          expect(() => UserTypingSchema.parse(invalidUserTyping)).toThrow();
+        });
+
+        it('should reject user_typing without displayName', () => {
+          const invalidUserTyping = {
+            type: 'user_typing' as const,
+            roomId: 'default',
+            userId: 'user_123'
+          };
+
+          expect(() => UserTypingSchema.parse(invalidUserTyping)).toThrow();
+        });
+      });
+
+      describe('user_typing_stop event', () => {
+        it('should accept valid user_typing_stop message', () => {
+          const validUserTypingStop = {
+            type: 'user_typing_stop' as const,
+            roomId: 'default',
+            userId: 'user_123'
+          };
+
+          expect(() => UserTypingStopSchema.parse(validUserTypingStop)).not.toThrow();
+        });
+
+        it('should reject user_typing_stop without userId', () => {
+          const invalidUserTypingStop = {
+            type: 'user_typing_stop' as const,
+            roomId: 'default'
+          };
+
+          expect(() => UserTypingStopSchema.parse(invalidUserTypingStop)).toThrow();
+        });
+
+        it('should reject user_typing_stop without roomId', () => {
+          const invalidUserTypingStop = {
+            type: 'user_typing_stop' as const,
+            userId: 'user_123'
+          };
+
+          expect(() => UserTypingStopSchema.parse(invalidUserTypingStop)).toThrow();
+        });
       });
     });
   });

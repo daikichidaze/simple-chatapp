@@ -23,6 +23,7 @@ export default function ChatPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [currentDisplayName, setCurrentDisplayName] = useState<string>('');
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
 
   const { error, showError, clearError, handleError } = useErrorHandler();
   const logger = useLogger('ChatPage');
@@ -167,6 +168,21 @@ export default function ChatPage() {
         trackEvent('websocket_reconnecting');
         clearError();
       },
+
+      onUserTyping: (userId: string, displayName: string) => {
+        logger.debug('User started typing', { userId, displayName });
+        setTypingUsers(prev => {
+          if (!prev.includes(userId)) {
+            return [...prev, userId];
+          }
+          return prev;
+        });
+      },
+
+      onUserTypingStop: (userId: string) => {
+        logger.debug('User stopped typing', { userId });
+        setTypingUsers(prev => prev.filter(id => id !== userId));
+      },
     });
 
     wsClient.current.connect();
@@ -298,6 +314,8 @@ export default function ChatPage() {
           <MessageList
             messages={messages}
             currentUserId={session?.user?.id}
+            onlineUsers={users}
+            typingUsers={typingUsers}
           />
 
           {/* スクロールアンカー */}
@@ -307,6 +325,8 @@ export default function ChatPage() {
             onSendMessage={handleSendMessage}
             disabled={connectionState !== 'connected'}
             onlineUsers={users}
+            ws={wsClient.current?.getWebSocket() || undefined}
+            roomId="default"
           />
         </div>
       </div>

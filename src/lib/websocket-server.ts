@@ -58,6 +58,7 @@ class MemoryStore {
   private connections = new Map<string, ExtendedWebSocket>(); // userId -> WebSocket
   private rooms = new Map<string, Set<string>>(); // roomId -> Set<userId>
   private rateLimiters = new Map<string, RateLimiter>(); // userId -> RateLimiter
+  private typingUsers = new Map<string, Map<string, NodeJS.Timeout>>(); // roomId -> Map<userId, timeout>
 
   // ユーザー管理
   addUser(userId: string, displayName: string, ws: ExtendedWebSocket) {
@@ -162,6 +163,61 @@ class MemoryStore {
 
     this.broadcastToRoom(roomId, presenceMessage);
   }
+
+  // タイピング管理
+  startTyping(userId: string, roomId: string) {
+    if (!this.typingUsers.has(roomId)) {
+      this.typingUsers.set(roomId, new Map());
+    }
+
+    const roomTyping = this.typingUsers.get(roomId)!;
+    const user = this.users.get(userId);
+
+    // 既存のタイマーをクリア
+    const existingTimeout = roomTyping.get(userId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // 3秒後に自動停止
+    const timeout = setTimeout(() => {
+      this.stopTyping(userId, roomId);
+    }, 3000);
+
+    roomTyping.set(userId, timeout);
+
+    if (user) {
+      // タイピング開始をブロードキャスト
+      this.broadcastToRoom(roomId, {
+        type: 'user_typing',
+        roomId,
+        userId,
+        displayName: user.displayName
+      }, userId);
+    }
+  }
+
+  stopTyping(userId: string, roomId: string) {
+    const roomTyping = this.typingUsers.get(roomId);
+    if (!roomTyping) return;
+
+    const timeout = roomTyping.get(userId);
+    if (timeout) {
+      clearTimeout(timeout);
+      roomTyping.delete(userId);
+
+      // タイピング停止をブロードキャスト
+      this.broadcastToRoom(roomId, {
+        type: 'user_typing_stop',
+        roomId,
+        userId
+      }, userId);
+    }
+
+    if (roomTyping.size === 0) {
+      this.typingUsers.delete(roomId);
+    }
+  }
 }
 
 // バリデーションスキーマ
@@ -181,6 +237,16 @@ const MessageSchema = z.object({
 const SetNameSchema = z.object({
   type: z.literal('set_name'),
   displayName: z.string().min(1).max(50)
+});
+
+const TypingStartSchema = z.object({
+  type: z.literal('typing_start'),
+  roomId: z.string()
+});
+
+const TypingStopSchema = z.object({
+  type: z.literal('typing_stop'),
+  roomId: z.string()
 });
 
 class WebSocketChatServer {
@@ -379,6 +445,12 @@ class WebSocketChatServer {
         case 'set_name':
           this.handleSetName(ws, SetNameSchema.parse(message));
           break;
+        case 'typing_start':
+          this.handleTypingStart(ws, TypingStartSchema.parse(message));
+          break;
+        case 'typing_stop':
+          this.handleTypingStop(ws, TypingStopSchema.parse(message));
+          break;
         default:
           this.sendError(ws, 'BAD_REQUEST', 'Unknown message type');
       }
@@ -477,6 +549,18 @@ class WebSocketChatServer {
     if (ws.roomId) {
       this.store.broadcastPresence(ws.roomId);
     }
+  }
+
+  private handleTypingStart(ws: ExtendedWebSocket, message: { type: 'typing_start', roomId: string }) {
+    if (!ws.userId) return;
+
+    this.store.startTyping(ws.userId, message.roomId);
+  }
+
+  private handleTypingStop(ws: ExtendedWebSocket, message: { type: 'typing_stop', roomId: string }) {
+    if (!ws.userId) return;
+
+    this.store.stopTyping(ws.userId, message.roomId);
   }
 
   private handleDisconnection(ws: ExtendedWebSocket) {

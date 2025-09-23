@@ -10,13 +10,17 @@ interface MessageComposerProps {
   disabled?: boolean;
   maxLength?: number;
   onlineUsers?: OnlineUser[];
+  ws?: WebSocket;
+  roomId?: string;
 }
 
 export function MessageComposer({
   onSendMessage,
   disabled = false,
   maxLength = 2000,
-  onlineUsers = []
+  onlineUsers = [],
+  ws,
+  roomId = 'default'
 }: MessageComposerProps) {
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -24,12 +28,62 @@ export function MessageComposer({
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [mentionPickerPosition, setMentionPickerPosition] = useState({ top: 0, left: 0 });
+  const [isTyping, setIsTyping] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // タイピング状態管理
+  const startTyping = () => {
+    if (!ws || !roomId) return;
+
+    if (!isTyping) {
+      setIsTyping(true);
+      ws.send(JSON.stringify({ type: 'typing_start', roomId }));
+    }
+
+    // 既存のタイマーをクリア
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // 1秒後に停止イベントを送信
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTyping();
+    }, 1000);
+  };
+
+  const stopTyping = () => {
+    if (!ws || !roomId || !isTyping) return;
+
+    setIsTyping(false);
+    ws.send(JSON.stringify({ type: 'typing_stop', roomId }));
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+  };
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // メンション検出
   const handleMessageChange = (value: string) => {
     setMessage(value);
+
+    // タイピング状態の更新
+    if (value.trim()) {
+      startTyping();
+    } else if (isTyping) {
+      stopTyping();
+    }
 
     if (!textareaRef.current) return;
 
@@ -106,6 +160,9 @@ export function MessageComposer({
 
     setIsSending(true);
     try {
+      // メッセージ送信前にタイピング状態を停止
+      stopTyping();
+
       await onSendMessage(trimmedMessage, mentions);
       setMessage('');
 

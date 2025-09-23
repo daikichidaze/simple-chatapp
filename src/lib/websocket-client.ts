@@ -12,6 +12,8 @@ export interface WebSocketClientCallbacks {
   onError?: (code: string, message: string) => void;
   onDisconnected?: () => void;
   onReconnecting?: () => void;
+  onUserTyping?: (userId: string, displayName: string) => void;
+  onUserTypingStop?: (userId: string) => void;
 }
 
 export class WebSocketClient {
@@ -198,6 +200,20 @@ export class WebSocketClient {
         }
         break;
 
+      case 'user_typing':
+        logger.debug('User started typing', { userId: message.userId, displayName: message.displayName }, 'WebSocketClient');
+        if (this.callbacks.onUserTyping) {
+          this.callbacks.onUserTyping(message.userId, message.displayName);
+        }
+        break;
+
+      case 'user_typing_stop':
+        logger.debug('User stopped typing', { userId: message.userId }, 'WebSocketClient');
+        if (this.callbacks.onUserTypingStop) {
+          this.callbacks.onUserTypingStop(message.userId);
+        }
+        break;
+
       case 'error':
         logger.error('Server error received', { code: message.code, message: message.msg }, undefined, 'WebSocketClient');
         monitoring.recordError('server_error', new Error(message.msg), { code: message.code });
@@ -274,6 +290,10 @@ export class WebSocketClient {
       type: 'set_name',
       displayName
     });
+  }
+
+  getWebSocket(): WebSocket | null {
+    return this.ws;
   }
 
   getConnectionState(): string {

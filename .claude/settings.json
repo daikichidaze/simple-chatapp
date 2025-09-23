@@ -1,0 +1,7 @@
+{
+    "allowedTools": [
+        "Edit",
+        "Bash(git:*)",
+        "Bash(gh:*)"
+    ]
+}
