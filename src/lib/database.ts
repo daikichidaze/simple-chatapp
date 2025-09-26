@@ -22,7 +22,7 @@ export function getDatabase(): Database.Database {
 function initializeSchema() {
   if (!db) return;
 
-  // メッセージテーブル作成
+  // メッセージテーブル作成（mentionsカラムを追加）
   db.exec(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
@@ -30,9 +30,19 @@ function initializeSchema() {
       user_id TEXT NOT NULL,
       display_name TEXT NOT NULL,
       text TEXT NOT NULL,
+      mentions TEXT, -- JSON文字列として保存
       ts INTEGER NOT NULL
     );
   `);
+
+  // 既存テーブルにmentionsカラムを追加（マイグレーション）
+  try {
+    db.exec(`
+      ALTER TABLE messages ADD COLUMN mentions TEXT;
+    `);
+  } catch (error) {
+    // カラムが既に存在する場合はエラーを無視
+  }
 
   // インデックス作成
   db.exec(`
@@ -55,8 +65,8 @@ export class MessageRepository {
 
     // プリペアドステートメント
     this.insertStmt = this.db.prepare(`
-      INSERT INTO messages (id, room_id, user_id, display_name, text, ts)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO messages (id, room_id, user_id, display_name, text, mentions, ts)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.selectRecentStmt = this.db.prepare(`
@@ -97,8 +107,9 @@ export class MessageRepository {
   createMessage(roomId: string, userId: string, displayName: string, text: string, mentions?: string[]): Message {
     const id = ulid();
     const ts = Date.now();
+    const mentionsJson = mentions ? JSON.stringify(mentions) : null;
 
-    this.insertStmt.run(id, roomId, userId, displayName, text, ts);
+    this.insertStmt.run(id, roomId, userId, displayName, text, mentionsJson, ts);
 
     return {
       id,
@@ -106,7 +117,7 @@ export class MessageRepository {
       userId,
       displayName,
       text,
-      mentions,
+      mentions: mentions || [],
       ts,
     };
   }
@@ -138,12 +149,23 @@ export class MessageRepository {
   }
 
   private mapDbToMessage(row: DbMessage): Message {
+    let mentions: string[] = [];
+    try {
+      if (row.mentions) {
+        mentions = JSON.parse(row.mentions);
+      }
+    } catch (error) {
+      // JSONパースエラーの場合は空配列を使用
+      console.warn('Failed to parse mentions JSON:', row.mentions);
+    }
+
     return {
       id: row.id,
       roomId: row.room_id,
       userId: row.user_id,
       displayName: row.display_name,
       text: row.text,
+      mentions,
       ts: row.ts,
     };
   }

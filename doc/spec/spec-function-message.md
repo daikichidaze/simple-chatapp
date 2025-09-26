@@ -1,0 +1,139 @@
+# 機能仕様書（Specification）
+
+## 1. 機能名
+メッセージ送受信機能
+
+---
+
+## 2. 機能の詳細
+- ユーザーがテキストメッセージを入力し、WebSocket経由でリアルタイムに他のユーザーに送信できる。
+- メッセージはSQLiteデータベースに永続化され、履歴として参照できる。
+- メッセージ送信時にはレート制限が適用され、スパム防止とシステム保護を実現する。
+- メンション機能により、特定のユーザーに向けたメッセージを送信できる。
+- メッセージ受信時は、リアルタイムで画面に表示される。
+
+---
+
+## 3. 入力の定義と制約条件
+- **入力項目**
+  - メッセージテキスト（string, 必須, 1〜1000文字, 改行含む）
+  - ルームID（string, 必須, 'default'固定 ※現バージョン）
+  - メンション（string[], 任意, @ユーザー名形式）
+
+- **制約条件**
+  - メッセージテキストは空文字や空白のみは不可。
+  - 1000文字を超える場合はクライアント側でエラー表示。
+  - レート制限：1ユーザーあたり3メッセージ/秒、バースト10メッセージまで。
+  - 認証済みユーザーのみ送信可能（JWT認証必須）。
+  - XSS対策としてHTMLタグはエスケープ処理される。
+
+---
+
+## 4. 処理の流れと条件分岐
+1. ユーザーがチャット画面でメッセージを入力し送信ボタンをクリック
+2. クライアント側でメッセージの形式と文字数をバリデーション
+   - NG → 「メッセージが長すぎます」等のエラーを表示（WebSocket未送信）
+3. WebSocketで `{ type: 'message', roomId: 'default', text: '...' }` を送信
+4. サーバー側で以下をチェック
+   - JWT認証が有効か
+     - 無効 → エラー（コード: `UNAUTH`）
+   - レート制限内か
+     - 超過 → エラー（コード: `RATE_LIMIT`）
+   - メッセージ形式が正しいか（Zod検証）
+     - 不正 → エラー（コード: `BAD_REQUEST`）
+5. 正常時の処理
+   - ユニークIDとタイムスタンプを付与
+   - メンション（@username）を解析・抽出
+   - SQLiteデータベースにメッセージを保存
+   - 同ルーム内の全接続ユーザーにブロードキャスト
+6. クライアント側でメッセージを受信し、チャット画面に表示
+
+---
+
+## 5. 出力形式とサンプル
+- **送信成功時（WebSocket message イベント）**
+```json
+{
+  "type": "message",
+  "id": "msg_1695123456789_abc123",
+  "roomId": "default",
+  "userId": "user_google_123456789",
+  "displayName": "Taro Yamada",
+  "text": "Hello everyone! @alice how are you?",
+  "mentions": ["alice"],
+  "ts": 1695123456789
+}
+```
+
+- **エラー時（WebSocket error イベント）**
+```json
+{
+  "type": "error",
+  "code": "RATE_LIMIT",
+  "msg": "メッセージ送信の制限に達しました。しばらく時間をおいてから再度お試しください。"
+}
+```
+
+---
+
+## 6. エラーケースの取扱い
+| ケース | エラーコード | 表示メッセージ |
+|--------|-------------|----------------|
+| 認証エラー | UNAUTH | 認証に失敗しました。再ログインしてください |
+| レート制限超過 | RATE_LIMIT | メッセージ送信の制限に達しました。しばらく時間をおいてから再度お試しください |
+| 入力形式エラー | BAD_REQUEST | メッセージの形式が不正です |
+| サーバーエラー | SERVER_ERROR | サーバーエラーが発生しました。しばらく時間をおいてから再度お試しください |
+
+---
+
+## 7. ソースコードファイル
+
+この機能に関連する主要なソースコードファイル：
+
+### サーバーサイド
+- [`src/lib/websocket-server.ts`](../../src/lib/websocket-server.ts) - WebSocketサーバー実装とメッセージ処理
+- [`src/lib/database.ts`](../../src/lib/database.ts) - SQLiteデータベース操作とメッセージ永続化
+- [`src/lib/rate-limiter.ts`](../../src/lib/rate-limiter.ts) - トークンバケット式レート制限実装
+- [`src/lib/server.ts`](../../src/lib/server.ts) - HTTPサーバーとWebSocketアップグレード処理
+
+### クライアントサイド
+- [`src/lib/websocket-client.ts`](../../src/lib/websocket-client.ts) - WebSocketクライアント接続と自動再接続
+- [`src/components/MessageComposer.tsx`](../../src/components/MessageComposer.tsx) - メッセージ入力UI とクライアント側バリデーション
+- [`src/components/MessageList.tsx`](../../src/components/MessageList.tsx) - メッセージ表示UI
+- [`src/components/ChatInterface.tsx`](../../src/components/ChatInterface.tsx) - チャット画面統合コンポーネント
+
+### 型定義・共通
+- [`src/types/index.ts`](../../src/types/index.ts) - メッセージ型定義とWebSocketイベント型
+- [`src/lib/validation.ts`](../../src/lib/validation.ts) - Zodスキーマ定義とバリデーション
+
+### テスト
+- [`src/__tests__/unit/message-validation.test.ts`](../../src/__tests__/unit/message-validation.test.ts) - メッセージバリデーションテスト
+- [`src/__tests__/integration/websocket-message.test.ts`](../../src/__tests__/integration/websocket-message.test.ts) - WebSocketメッセージ統合テスト
+
+---
+
+## 8. テストケースの説明
+- **正常系**
+  1. 有効な認証状態で1000文字以内のメッセージを送信できること
+  2. メンション付きメッセージ（@username）が正しく解析されること
+  3. 送信したメッセージが同ルーム内の全ユーザーに即座にブロードキャストされること
+  4. 送信したメッセージがSQLiteに正しく保存されること
+
+- **異常系**
+  1. 未認証状態でメッセージ送信 → `UNAUTH` エラーが返ること
+  2. レート制限を超えて連続送信 → `RATE_LIMIT` エラーが返ること
+  3. 1000文字を超えるメッセージ送信 → クライアント側でバリデーションエラー
+  4. 空文字やnullのメッセージ → `BAD_REQUEST` エラーが返ること
+
+- **境界値テスト**
+  1. メッセージ文字数1文字の場合に正常に送信できること
+  2. メッセージ文字数1000文字の場合に正常に送信できること
+  3. レート制限のバースト10メッセージまで連続送信できること
+  4. 3メッセージ/秒の制限が正しく機能すること
+
+- **統合テスト**
+  1. 複数ユーザーが同時にメッセージを送信した場合の整合性確保
+  2. 長時間接続でメッセージ送受信が継続して動作すること
+  3. WebSocket接続が一時的に切断・再接続した場合の復旧動作
+
+---

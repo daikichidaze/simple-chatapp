@@ -46,5 +46,6 @@ export interface DbMessage {
   user_id: string;
   display_name: string;
   text: string;
+  mentions?: string; // JSON文字列
   ts: number;
 }

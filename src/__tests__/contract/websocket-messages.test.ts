@@ -13,7 +13,7 @@ describe('WebSocket Message Contract Tests', () => {
   const MessageSchema = z.object({
     type: z.literal('message'),
     roomId: z.string(),
-    text: z.string().max(2000)
+    text: z.string().min(1).max(1000) // 仕様書に合わせて1〜1000文字制限
   });
 
   const SetNameSchema = z.object({
@@ -140,14 +140,24 @@ describe('WebSocket Message Contract Tests', () => {
         expect(() => MessageSchema.parse(validMessage)).not.toThrow();
       });
 
-      it('should reject message exceeding 2000 characters', () => {
+      it('should reject message exceeding 1000 characters', () => {
         const longMessage = {
           type: 'message' as const,
           roomId: 'default',
-          text: 'a'.repeat(2001)
+          text: 'a'.repeat(1001)
         };
 
         expect(() => MessageSchema.parse(longMessage)).toThrow();
+      });
+
+      it('should reject empty message', () => {
+        const emptyMessage = {
+          type: 'message' as const,
+          roomId: 'default',
+          text: ''
+        };
+
+        expect(() => MessageSchema.parse(emptyMessage)).toThrow();
       });
 
       it('should reject message without required fields', () => {

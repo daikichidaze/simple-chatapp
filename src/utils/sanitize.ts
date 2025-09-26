@@ -24,22 +24,22 @@ export function sanitizeText(text: string): string {
 
 export function validateMessageText(text: string): { isValid: boolean; error?: string } {
   if (!text || text.trim().length === 0) {
-    return { isValid: false, error: 'Message cannot be empty' };
+    return { isValid: false, error: 'メッセージが空です' };
   }
 
-  if (text.length > 2000) {
-    return { isValid: false, error: 'Message too long (max 2000 characters)' };
+  if (text.length > 1000) {
+    return { isValid: false, error: 'メッセージが長すぎます（最大1000文字）' };
   }
 
   // 改行数制限（スパム防止）
   const lineCount = text.split('\n').length;
   if (lineCount > 20) {
-    return { isValid: false, error: 'Too many line breaks (max 20)' };
+    return { isValid: false, error: '改行が多すぎます（最大20行）' };
   }
 
   // 連続する空白文字の制限
   if (/\s{100,}/.test(text)) {
-    return { isValid: false, error: 'Too many consecutive spaces' };
+    return { isValid: false, error: '連続する空白文字が多すぎます' };
   }
 
   return { isValid: true };

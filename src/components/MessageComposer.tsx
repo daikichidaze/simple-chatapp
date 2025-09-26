@@ -17,7 +17,7 @@ interface MessageComposerProps {
 export function MessageComposer({
   onSendMessage,
   disabled = false,
-  maxLength = 2000,
+  maxLength = 1000,
   onlineUsers = [],
   ws,
   roomId = 'default'
