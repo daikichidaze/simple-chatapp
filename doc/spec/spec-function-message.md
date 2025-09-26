@@ -86,7 +86,33 @@
 
 ---
 
-## 7. テストケースの説明
+## 7. ソースコードファイル
+
+この機能に関連する主要なソースコードファイル：
+
+### サーバーサイド
+- [`src/lib/websocket-server.ts`](../../src/lib/websocket-server.ts) - WebSocketサーバー実装とメッセージ処理
+- [`src/lib/database.ts`](../../src/lib/database.ts) - SQLiteデータベース操作とメッセージ永続化
+- [`src/lib/rate-limiter.ts`](../../src/lib/rate-limiter.ts) - トークンバケット式レート制限実装
+- [`src/lib/server.ts`](../../src/lib/server.ts) - HTTPサーバーとWebSocketアップグレード処理
+
+### クライアントサイド
+- [`src/lib/websocket-client.ts`](../../src/lib/websocket-client.ts) - WebSocketクライアント接続と自動再接続
+- [`src/components/MessageComposer.tsx`](../../src/components/MessageComposer.tsx) - メッセージ入力UI とクライアント側バリデーション
+- [`src/components/MessageList.tsx`](../../src/components/MessageList.tsx) - メッセージ表示UI
+- [`src/components/ChatInterface.tsx`](../../src/components/ChatInterface.tsx) - チャット画面統合コンポーネント
+
+### 型定義・共通
+- [`src/types/index.ts`](../../src/types/index.ts) - メッセージ型定義とWebSocketイベント型
+- [`src/lib/validation.ts`](../../src/lib/validation.ts) - Zodスキーマ定義とバリデーション
+
+### テスト
+- [`src/__tests__/unit/message-validation.test.ts`](../../src/__tests__/unit/message-validation.test.ts) - メッセージバリデーションテスト
+- [`src/__tests__/integration/websocket-message.test.ts`](../../src/__tests__/integration/websocket-message.test.ts) - WebSocketメッセージ統合テスト
+
+---
+
+## 8. テストケースの説明
 - **正常系**
   1. 有効な認証状態で1000文字以内のメッセージを送信できること
   2. メンション付きメッセージ（@username）が正しく解析されること

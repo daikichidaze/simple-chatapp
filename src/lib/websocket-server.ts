@@ -7,6 +7,32 @@ import { MessageRepository, startCleanupJob } from './database';
 import { ClientToServerEvents, ServerToClientEvents, User } from '@/types';
 import { z } from 'zod';
 
+// HTMLエスケープ関数
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// メンション抽出関数
+function extractMentions(text: string): string[] {
+  const mentionPattern = /@(\w+)/g;
+  const mentions: string[] = [];
+  let match;
+
+  while ((match = mentionPattern.exec(text)) !== null) {
+    const username = match[1];
+    if (!mentions.includes(username)) {
+      mentions.push(username);
+    }
+  }
+
+  return mentions;
+}
+
 interface ExtendedWebSocket extends WebSocket {
   userId?: string;
   displayName?: string;
@@ -231,7 +257,7 @@ const JoinSchema = z.object({
 const MessageSchema = z.object({
   type: z.literal('message'),
   roomId: z.string(),
-  text: z.string().max(2000) // 文字数制限
+  text: z.string().min(1).max(1000) // 仕様書に合わせて1〜1000文字制限
 });
 
 const SetNameSchema = z.object({
@@ -503,20 +529,33 @@ class WebSocketChatServer {
   private handleChatMessage(ws: ExtendedWebSocket, message: { type: 'message', roomId: string, text: string }) {
     if (!ws.userId || !ws.displayName) return;
 
+    // 空文字や空白のみのチェック
+    const trimmedText = message.text.trim();
+    if (!trimmedText) {
+      this.sendError(ws, 'BAD_REQUEST', 'メッセージの形式が不正です');
+      return;
+    }
+
     // レート制限チェック
     const rateLimiter = this.store.getRateLimiter(ws.userId);
     if (rateLimiter && rateLimiter.isRateLimited()) {
-      this.sendError(ws, 'RATE_LIMIT', 'Too many messages. Slow down.');
+      this.sendError(ws, 'RATE_LIMIT', 'メッセージ送信の制限に達しました。しばらく時間をおいてから再度お試しください。');
       return;
     }
+
+    // HTMLエスケープ処理（XSS対策）
+    const escapedText = escapeHtml(message.text);
+
+    // メンション抽出
+    const mentions = extractMentions(message.text);
 
     // メッセージ作成・保存
     const createdMessage = this.messageRepo.createMessage(
       message.roomId,
       ws.userId,
       ws.displayName,
-      message.text
-      // TODO: メンション機能は後で実装
+      escapedText,
+      mentions
     );
 
     // レート制限カウンター更新
